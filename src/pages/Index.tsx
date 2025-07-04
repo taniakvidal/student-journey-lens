@@ -14,6 +14,7 @@ import { AdvisorImpact } from "@/components/AdvisorImpact";
 import { ProgramPerformance } from "@/components/ProgramPerformance";
 import { KPISummary } from "@/components/KPISummary";
 import { ExportPanel } from "@/components/ExportPanel";
+import { ReasoningQuery } from "@/components/ReasoningQuery";
 import { StudentData, FilterState } from "@/types/student";
 import { processStudentData } from "@/utils/dataProcessor";
 
@@ -73,12 +74,13 @@ const Index = () => {
 
             {/* Analytics Tabs */}
             <Tabs defaultValue="overview" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-6 lg:w-fit lg:grid-cols-6">
+              <TabsList className="grid w-full grid-cols-7 lg:w-fit lg:grid-cols-7">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="journey">Journey</TabsTrigger>
                 <TabsTrigger value="risk">Risk Analysis</TabsTrigger>
                 <TabsTrigger value="performance">Performance</TabsTrigger>
                 <TabsTrigger value="advisor">Advisor Impact</TabsTrigger>
+                <TabsTrigger value="reasoning">AI Reasoning</TabsTrigger>
                 <TabsTrigger value="export">Export</TabsTrigger>
               </TabsList>
 
@@ -110,6 +112,10 @@ const Index = () => {
 
               <TabsContent value="advisor">
                 <AdvisorImpact data={filteredData} />
+              </TabsContent>
+
+              <TabsContent value="reasoning">
+                <ReasoningQuery data={filteredData} />
               </TabsContent>
 
               <TabsContent value="export">
