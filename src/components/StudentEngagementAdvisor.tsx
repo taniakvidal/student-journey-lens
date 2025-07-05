@@ -248,7 +248,7 @@ Respond in JSON format:
             },
             {
               type: 'intervention',
-              priority: 'urgent',
+              priority: 'high',
               title: 'Missing Advisor Contact System Failure',
               description: `${engagementData.noAdvisorContact} students lack advisor engagement despite academic challenges.`,
               actionable_recommendations: [
