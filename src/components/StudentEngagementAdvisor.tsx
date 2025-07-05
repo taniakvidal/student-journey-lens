@@ -4,12 +4,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Users, AlertTriangle, TrendingUp, MessageSquare } from "lucide-react";
+import { Loader2, Users, AlertTriangle, TrendingUp, MessageSquare, CheckCircle, Clock, ArrowRight } from "lucide-react";
 import { ProcessedData } from "@/types/student";
 import { useToast } from "@/hooks/use-toast";
 
 interface StudentEngagementAdvisorProps {
   data: ProcessedData;
+}
+
+interface ActionStep {
+  step: number;
+  action: string;
+  timeline: string;
+  responsible: string;
+  success_metric: string;
+}
+
+interface DecisionTree {
+  condition: string;
+  decision: 'immediate' | 'urgent' | 'moderate' | 'monitor';
+  next_steps: ActionStep[];
+  expected_outcome: string;
 }
 
 interface EngagementInsight {
@@ -20,22 +35,26 @@ interface EngagementInsight {
   actionable_recommendations: string[];
   affected_students: number;
   confidence: number;
+  decision_tree: DecisionTree;
 }
 
 interface AdvisorAnalysis {
   insights: EngagementInsight[];
   summary: string;
   timestamp: Date;
+  immediate_actions: number;
+  urgent_actions: number;
 }
 
 export const StudentEngagementAdvisor: React.FC<StudentEngagementAdvisorProps> = ({ data }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<AdvisorAnalysis | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [completedActions, setCompletedActions] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const generateEngagementAnalysis = () => {
-    const { students, summary } = data;
+    const { students } = data;
 
     // Analyze disengagement patterns
     const lowEngagementStudents = students.filter(s => 
@@ -54,52 +73,11 @@ export const StudentEngagementAdvisor: React.FC<StudentEngagementAdvisorProps> =
       (s.credits_earned / s.total_credits_required) < 0.4
     );
 
-    // Program performance analysis
-    const programStats = new Map();
-    students.forEach(student => {
-      const program = student.program;
-      if (!programStats.has(program)) {
-        programStats.set(program, {
-          totalStudents: new Set(),
-          avgGPA: 0,
-          avgAttendance: 0,
-          completionRate: 0,
-          records: []
-        });
-      }
-      programStats.get(program).records.push(student);
-      programStats.get(program).totalStudents.add(student.student_id);
-    });
-
-    // Course category analysis
-    const courseStats = new Map();
-    students.forEach(student => {
-      const category = student.course_category;
-      if (!courseStats.has(category)) {
-        courseStats.set(category, {
-          totalEnrollments: 0,
-          completedCount: 0,
-          droppedCount: 0,
-          avgGrade: 0,
-          records: []
-        });
-      }
-      courseStats.get(category).records.push(student);
-      courseStats.get(category).totalEnrollments++;
-      if (student.completion_status === 'Completed') {
-        courseStats.get(category).completedCount++;
-      } else if (student.completion_status === 'Dropped') {
-        courseStats.get(category).droppedCount++;
-      }
-    });
-
     return {
       lowEngagementStudents: lowEngagementStudents.length,
       noAdvisorContact: noAdvisorContact.length,
       highSupportNoProgress: highSupportNoProgress.length,
       lowCreditProgress: lowCreditProgress.length,
-      programCount: programStats.size,
-      courseCategories: courseStats.size,
       riskStudents: lowEngagementStudents.slice(0, 10).map(s => ({
         id: s.student_id,
         program: s.program,
@@ -108,22 +86,7 @@ export const StudentEngagementAdvisor: React.FC<StudentEngagementAdvisorProps> =
         advisorMeetings: s.advisor_meeting_count,
         supportTickets: s.support_ticket_count,
         creditProgress: (s.credits_earned / s.total_credits_required) * 100
-      })),
-      programInsights: Array.from(programStats.entries()).map(([program, stats]) => {
-        const records = stats.records;
-        const avgGPA = records.reduce((sum, r) => sum + r.gpa_at_time, 0) / records.length;
-        const avgAttendance = records.reduce((sum, r) => sum + r.attendance_rate, 0) / records.length;
-        const completed = records.filter(r => r.completion_status === 'Completed').length;
-        const completionRate = (completed / stats.totalStudents.size) * 100;
-        
-        return {
-          program,
-          totalStudents: stats.totalStudents.size,
-          avgGPA: avgGPA.toFixed(2),
-          avgAttendance: (avgAttendance * 100).toFixed(1),
-          completionRate: completionRate.toFixed(1)
-        };
-      }).sort((a, b) => parseFloat(b.completionRate) - parseFloat(a.completionRate))
+      }))
     };
   };
 
@@ -142,42 +105,53 @@ export const StudentEngagementAdvisor: React.FC<StudentEngagementAdvisorProps> =
     try {
       const engagementData = generateEngagementAnalysis();
       
-      const systemPrompt = `You are a Student Engagement Advisor Agent focused on analyzing academic performance, engagement patterns, and advising interactions. 
+      const systemPrompt = `You are a Student Engagement Advisor Agent focused on providing clear decisions and actionable next steps.
 
-Analyze this student engagement data and provide actionable insights:
+Analyze this student engagement data and provide structured decision trees with specific action steps:
 
-Low Engagement Students (attendance <60% + GPA <2.5): ${engagementData.lowEngagementStudents}
+Low Engagement Students: ${engagementData.lowEngagementStudents}
 Students with No Advisor Contact: ${engagementData.noAdvisorContact}
-High Support Tickets + Low Progress: ${engagementData.highSupportNoProgress}
-Students with <40% Credit Progress: ${engagementData.lowCreditProgress}
+High Support + Low Progress: ${engagementData.highSupportNoProgress}
+Low Credit Progress: ${engagementData.lowCreditProgress}
 
-Risk Students Sample: ${JSON.stringify(engagementData.riskStudents.slice(0, 3), null, 2)}
+For each insight, provide a decision tree with clear next steps including:
+- Specific actions to take
+- Timeline for each action
+- Who is responsible
+- Success metrics to track
+- Expected outcomes
 
-Program Performance: ${JSON.stringify(engagementData.programInsights.slice(0, 5), null, 2)}
-
-Provide your analysis in JSON format with this structure:
+Respond in JSON format:
 {
   "insights": [
     {
-      "type": "risk_alert" | "intervention" | "program_pattern" | "course_issue",
-      "priority": "high" | "medium" | "low",
-      "title": "Brief insight title",
-      "description": "Detailed explanation of the pattern or issue",
-      "actionable_recommendations": ["specific action 1", "specific action 2"],
+      "type": "risk_alert",
+      "priority": "high",
+      "title": "Clear insight title",
+      "description": "Specific issue description",
+      "actionable_recommendations": ["recommendation 1", "recommendation 2"],
       "affected_students": number,
-      "confidence": 0.85
+      "confidence": 0.85,
+      "decision_tree": {
+        "condition": "IF student has X condition",
+        "decision": "immediate|urgent|moderate|monitor",
+        "next_steps": [
+          {
+            "step": 1,
+            "action": "Specific action to take",
+            "timeline": "Within 24 hours",
+            "responsible": "Academic Advisor",
+            "success_metric": "Student responds to outreach"
+          }
+        ],
+        "expected_outcome": "What we expect to achieve"
+      }
     }
   ],
-  "summary": "Overall assessment and key priorities for advisors"
-}
-
-Focus on:
-1. Early disengagement warning signs
-2. Specific intervention recommendations
-3. Systemic issues requiring institutional attention
-4. Resource allocation priorities`;
-
-      const userQuery = `Analyze the engagement patterns and provide specific, actionable recommendations for advisors and administrators to improve student success and reduce dropout risk.`;
+  "summary": "Overall assessment",
+  "immediate_actions": number,
+  "urgent_actions": number
+}`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -194,11 +168,11 @@ Focus on:
             },
             {
               role: 'user',
-              content: userQuery
+              content: 'Provide structured decision trees and clear next steps for these engagement patterns.'
             }
           ],
           temperature: 0.3,
-          max_tokens: 2000
+          max_tokens: 3000
         }),
       });
 
@@ -214,50 +188,110 @@ Focus on:
         const advisorAnalysis: AdvisorAnalysis = {
           insights: parsedAnalysis.insights || [],
           summary: parsedAnalysis.summary || 'Analysis completed successfully.',
-          timestamp: new Date()
+          timestamp: new Date(),
+          immediate_actions: parsedAnalysis.immediate_actions || 0,
+          urgent_actions: parsedAnalysis.urgent_actions || 0
         };
 
         setAnalysis(advisorAnalysis);
         
         toast({
-          title: "Advisor Analysis Complete",
-          description: `Generated ${advisorAnalysis.insights.length} engagement insights`
+          title: "Decision Analysis Complete",
+          description: `Generated ${advisorAnalysis.insights.length} decision trees with ${advisorAnalysis.immediate_actions + advisorAnalysis.urgent_actions} priority actions`
         });
 
       } catch (parseError) {
         console.error('Failed to parse AI response:', parseError);
-        // Fallback analysis
+        // Fallback with structured decision trees
         const fallbackAnalysis: AdvisorAnalysis = {
           insights: [
             {
               type: 'risk_alert',
               priority: 'high',
-              title: 'High-Risk Student Identification',
-              description: `${engagementData.lowEngagementStudents} students show critical disengagement patterns with low attendance and GPA.`,
+              title: 'High-Risk Student Intervention Required',
+              description: `${engagementData.lowEngagementStudents} students show critical disengagement with dual risk factors.`,
               actionable_recommendations: [
-                'Schedule immediate advisor meetings for students with <60% attendance and <2.5 GPA',
-                'Implement early warning system for similar patterns',
-                'Provide academic support resources and study skills workshops'
+                'Schedule mandatory advisor meetings within 48 hours',
+                'Implement academic probation procedures',
+                'Connect with academic support services'
               ],
               affected_students: engagementData.lowEngagementStudents,
-              confidence: 0.9
+              confidence: 0.9,
+              decision_tree: {
+                condition: 'IF student has <60% attendance AND <2.5 GPA',
+                decision: 'immediate',
+                next_steps: [
+                  {
+                    step: 1,
+                    action: 'Contact student via phone and email for emergency meeting',
+                    timeline: 'Within 24 hours',
+                    responsible: 'Academic Advisor',
+                    success_metric: 'Student responds and schedules meeting'
+                  },
+                  {
+                    step: 2,
+                    action: 'Assess personal/academic barriers in one-on-one meeting',
+                    timeline: 'Within 48 hours',
+                    responsible: 'Academic Advisor',
+                    success_metric: 'Identify specific challenges and create action plan'
+                  },
+                  {
+                    step: 3,
+                    action: 'Connect with tutoring, counseling, or financial aid as needed',
+                    timeline: 'Within 1 week',
+                    responsible: 'Student Success Coordinator',
+                    success_metric: 'Student enrolled in appropriate support services'
+                  }
+                ],
+                expected_outcome: 'Improved attendance and GPA within 4 weeks'
+              }
             },
             {
               type: 'intervention',
-              priority: 'high',
-              title: 'Advisor Engagement Gap',
-              description: `${engagementData.noAdvisorContact} students have had no advisor contact despite academic challenges.`,
+              priority: 'urgent',
+              title: 'Missing Advisor Contact System Failure',
+              description: `${engagementData.noAdvisorContact} students lack advisor engagement despite academic challenges.`,
               actionable_recommendations: [
-                'Mandate advisor check-ins for all students with incomplete status',
-                'Implement proactive outreach system',
-                'Train advisors on early intervention strategies'
+                'Implement mandatory check-in system',
+                'Train advisors on proactive outreach',
+                'Create automated early warning alerts'
               ],
               affected_students: engagementData.noAdvisorContact,
-              confidence: 0.85
+              confidence: 0.85,
+              decision_tree: {
+                condition: 'IF student has 0 advisor meetings AND incomplete status',
+                decision: 'urgent',
+                next_steps: [
+                  {
+                    step: 1,
+                    action: 'Send automated outreach email with meeting scheduler',
+                    timeline: 'Within 2 hours',
+                    responsible: 'Academic System',
+                    success_metric: 'Email delivered and meeting scheduled'
+                  },
+                  {
+                    step: 2,
+                    action: 'Conduct initial advisor meeting to assess needs',
+                    timeline: 'Within 1 week',
+                    responsible: 'Academic Advisor',
+                    success_metric: 'Complete academic progress review'
+                  },
+                  {
+                    step: 3,
+                    action: 'Establish regular meeting schedule (bi-weekly minimum)',
+                    timeline: 'Ongoing',
+                    responsible: 'Academic Advisor',
+                    success_metric: 'Consistent advisor contact maintained'
+                  }
+                ],
+                expected_outcome: 'Improved student retention and course completion'
+              }
             }
           ],
-          summary: `Critical engagement issues identified requiring immediate attention. Focus on the ${engagementData.lowEngagementStudents} students with dual risk factors and the ${engagementData.noAdvisorContact} students lacking advisor support.`,
-          timestamp: new Date()
+          summary: `Critical engagement issues require immediate action. ${engagementData.lowEngagementStudents} students need emergency intervention, while ${engagementData.noAdvisorContact} students require systematic advisor engagement.`,
+          timestamp: new Date(),
+          immediate_actions: engagementData.lowEngagementStudents,
+          urgent_actions: engagementData.noAdvisorContact
         };
 
         setAnalysis(fallbackAnalysis);
@@ -275,6 +309,15 @@ Focus on:
     }
   };
 
+  const markActionCompleted = (insightIndex: number, stepIndex: number) => {
+    const actionId = `${insightIndex}-${stepIndex}`;
+    setCompletedActions(prev => new Set([...prev, actionId]));
+    toast({
+      title: "Action Marked Complete",
+      description: "Great job! Keep track of outcomes for continuous improvement."
+    });
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'high': return 'bg-red-500';
@@ -284,13 +327,13 @@ Focus on:
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'risk_alert': return <AlertTriangle className="h-4 w-4" />;
-      case 'intervention': return <Users className="h-4 w-4" />;
-      case 'program_pattern': return <TrendingUp className="h-4 w-4" />;
-      case 'course_issue': return <MessageSquare className="h-4 w-4" />;
-      default: return <MessageSquare className="h-4 w-4" />;
+  const getDecisionColor = (decision: string) => {
+    switch (decision) {
+      case 'immediate': return 'bg-red-600 text-white';
+      case 'urgent': return 'bg-orange-500 text-white';
+      case 'moderate': return 'bg-yellow-500 text-black';
+      case 'monitor': return 'bg-blue-500 text-white';
+      default: return 'bg-gray-500 text-white';
     }
   };
 
@@ -308,7 +351,7 @@ Focus on:
                 <span className="font-medium text-blue-800">AI Engagement Advisor</span>
               </div>
               <p className="text-sm text-blue-700">
-                Enter your OpenAI API key to enable AI-powered engagement analysis and intervention recommendations
+                Enter your OpenAI API key to enable AI-powered engagement analysis with clear decision trees and next steps
               </p>
               <div className="flex space-x-2">
                 <input
@@ -332,7 +375,7 @@ Focus on:
               <AlertTriangle className="h-5 w-5 text-red-600" />
               <div>
                 <div className="text-2xl font-bold text-red-600">{quickStats.lowEngagementStudents}</div>
-                <div className="text-sm text-gray-600">Low Engagement Risk</div>
+                <div className="text-sm text-gray-600">Immediate Action Needed</div>
               </div>
             </div>
           </CardContent>
@@ -344,7 +387,7 @@ Focus on:
               <Users className="h-5 w-5 text-orange-600" />
               <div>
                 <div className="text-2xl font-bold text-orange-600">{quickStats.noAdvisorContact}</div>
-                <div className="text-sm text-gray-600">No Advisor Contact</div>
+                <div className="text-sm text-gray-600">Urgent Outreach Required</div>
               </div>
             </div>
           </CardContent>
@@ -356,7 +399,7 @@ Focus on:
               <MessageSquare className="h-5 w-5 text-yellow-600" />
               <div>
                 <div className="text-2xl font-bold text-yellow-600">{quickStats.highSupportNoProgress}</div>
-                <div className="text-sm text-gray-600">High Support, Low Progress</div>
+                <div className="text-sm text-gray-600">Support Strategy Review</div>
               </div>
             </div>
           </CardContent>
@@ -368,7 +411,7 @@ Focus on:
               <TrendingUp className="h-5 w-5 text-purple-600" />
               <div>
                 <div className="text-2xl font-bold text-purple-600">{quickStats.lowCreditProgress}</div>
-                <div className="text-sm text-gray-600">Low Credit Progress</div>
+                <div className="text-sm text-gray-600">Academic Planning Needed</div>
               </div>
             </div>
           </CardContent>
@@ -393,12 +436,12 @@ Focus on:
             {isAnalyzing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analyzing Student Engagement Patterns...
+                Generating Decision Trees & Action Plans...
               </>
             ) : (
               <>
                 <Users className="mr-2 h-4 w-4" />
-                Generate Engagement Analysis & Recommendations
+                Generate Structured Decision Analysis
               </>
             )}
           </Button>
@@ -408,10 +451,20 @@ Focus on:
       {/* Analysis Results */}
       {analysis && (
         <div className="space-y-6">
-          {/* Summary */}
+          {/* Summary with Action Counts */}
           <Card>
             <CardHeader>
-              <CardTitle>Engagement Analysis Summary</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Decision Analysis Summary</span>
+                <div className="flex space-x-2">
+                  <Badge className="bg-red-500 text-white">
+                    {analysis.immediate_actions} Immediate
+                  </Badge>
+                  <Badge className="bg-orange-500 text-white">
+                    {analysis.urgent_actions} Urgent
+                  </Badge>
+                </div>
+              </CardTitle>
               <div className="text-sm text-gray-500">
                 Generated on {analysis.timestamp.toLocaleString()}
               </div>
@@ -423,41 +476,100 @@ Focus on:
             </CardContent>
           </Card>
 
-          {/* Insights */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Actionable Insights & Recommendations</h3>
-            {analysis.insights.map((insight, index) => (
-              <Card key={index} className="border-l-4" style={{ borderLeftColor: insight.priority === 'high' ? '#ef4444' : insight.priority === 'medium' ? '#f59e0b' : '#10b981' }}>
+          {/* Decision Trees & Action Plans */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-semibold">Decision Trees & Action Plans</h3>
+            {analysis.insights.map((insight, insightIndex) => (
+              <Card key={insightIndex} className="border-l-4" style={{ borderLeftColor: insight.priority === 'high' ? '#ef4444' : insight.priority === 'medium' ? '#f59e0b' : '#10b981' }}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-2">
-                      {getTypeIcon(insight.type)}
-                      <div>
-                        <CardTitle className="text-lg">{insight.title}</CardTitle>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <Badge className={`${getPriorityColor(insight.priority)} text-white`}>
-                            {insight.priority.toUpperCase()} PRIORITY
-                          </Badge>
-                          <Badge variant="outline">
-                            {insight.affected_students} students affected
-                          </Badge>
-                          <Badge variant="outline">
-                            {(insight.confidence * 100).toFixed(0)}% confidence
-                          </Badge>
-                        </div>
+                    <div>
+                      <CardTitle className="text-lg mb-2">{insight.title}</CardTitle>
+                      <div className="flex items-center space-x-2 mb-3">
+                        <Badge className={`${getPriorityColor(insight.priority)} text-white`}>
+                          {insight.priority.toUpperCase()} PRIORITY
+                        </Badge>
+                        <Badge className={getDecisionColor(insight.decision_tree.decision)}>
+                          {insight.decision_tree.decision.toUpperCase()} ACTION
+                        </Badge>
+                        <Badge variant="outline">
+                          {insight.affected_students} students
+                        </Badge>
                       </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <p className="text-gray-700 mb-4">{insight.description}</p>
+                  
+                  {/* Decision Tree */}
+                  <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                    <h4 className="font-semibold mb-2 flex items-center">
+                      <ArrowRight className="h-4 w-4 mr-2" />
+                      Decision Logic
+                    </h4>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Condition:</strong> {insight.decision_tree.condition}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Expected Outcome:</strong> {insight.decision_tree.expected_outcome}
+                    </p>
+                  </div>
+
+                  {/* Action Steps */}
                   <div>
-                    <h4 className="font-semibold mb-2">Recommended Actions:</h4>
-                    <ul className="list-disc list-inside space-y-1 text-sm">
-                      {insight.actionable_recommendations.map((rec, recIndex) => (
-                        <li key={recIndex} className="text-gray-600">{rec}</li>
-                      ))}
-                    </ul>
+                    <h4 className="font-semibold mb-3">Action Steps:</h4>
+                    <div className="space-y-3">
+                      {insight.decision_tree.next_steps.map((step, stepIndex) => {
+                        const actionId = `${insightIndex}-${stepIndex}`;
+                        const isCompleted = completedActions.has(actionId);
+                        
+                        return (
+                          <div key={stepIndex} className={`border rounded-lg p-3 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <Badge variant="outline">Step {step.step}</Badge>
+                                  <Badge className="bg-blue-100 text-blue-800">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {step.timeline}
+                                  </Badge>
+                                  {isCompleted && (
+                                    <Badge className="bg-green-500 text-white">
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Completed
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="font-medium mb-1">{step.action}</p>
+                                <p className="text-sm text-gray-600 mb-1">
+                                  <strong>Responsible:</strong> {step.responsible}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  <strong>Success Metric:</strong> {step.success_metric}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant={isCompleted ? "secondary" : "default"}
+                                onClick={() => markActionCompleted(insightIndex, stepIndex)}
+                                disabled={isCompleted}
+                                className="ml-4"
+                              >
+                                {isCompleted ? (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-1" />
+                                    Done
+                                  </>
+                                ) : (
+                                  'Mark Complete'
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
