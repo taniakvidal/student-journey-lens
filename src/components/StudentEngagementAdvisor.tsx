@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Users, AlertTriangle, TrendingUp, MessageSquare, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import { Loader2, Users, AlertTriangle, TrendingUp, MessageSquare, CheckCircle, Clock, ArrowRight, Phone, Mail } from "lucide-react";
 import { ProcessedData } from "@/types/student";
 import { useToast } from "@/hooks/use-toast";
 import { EmailShareDialog } from "@/components/EmailShareDialog";
+import { StudentContactDialog } from "@/components/StudentContactDialog";
 
 interface StudentEngagementAdvisorProps {
   data: ProcessedData;
@@ -445,6 +446,69 @@ Respond in JSON format:
               </>
             )}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Student Contact Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Phone className="h-6 w-6 text-green-600" />
+            <span>Student Outreach & Contact</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600 mb-4">
+            Reach out directly to at-risk students with personalized messages and support resources.
+          </p>
+          
+          {quickStats.riskStudents.length > 0 ? (
+            <div className="space-y-3">
+              <h4 className="font-semibold text-gray-800 mb-3">High Priority Students</h4>
+              {quickStats.riskStudents.slice(0, 5).map(student => (
+                <div key={student.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center space-x-4">
+                    <Badge className="bg-red-500 text-white">
+                      HIGH RISK
+                    </Badge>
+                    <div>
+                      <div className="font-medium">Student ID: {student.id}</div>
+                      <div className="text-sm text-gray-600">
+                        {student.program} | GPA: {student.gpa.toFixed(2)} | 
+                        Attendance: {(student.attendance * 100).toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                  <StudentContactDialog
+                    trigger={
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                        <Mail className="h-4 w-4 mr-1" />
+                        Contact
+                      </Button>
+                    }
+                    student={{
+                      student_id: student.id,
+                      program: student.program,
+                      gpa: student.gpa,
+                      attendance: student.attendance,
+                      riskScore: (student.creditProgress < 40 && student.gpa < 2.5 && student.attendance < 0.6) ? 0.8 : 0.6
+                    }}
+                  />
+                </div>
+              ))}
+              {quickStats.riskStudents.length > 5 && (
+                <div className="text-center py-2 text-gray-500">
+                  ... and {quickStats.riskStudents.length - 5} more students need attention
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No high-risk students identified at this time.</p>
+              <p className="text-sm">Run the AI analysis above to identify students who may need support.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
