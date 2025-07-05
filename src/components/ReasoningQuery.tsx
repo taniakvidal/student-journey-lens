@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Brain, MessageCircle } from "lucide-react";
 import { ProcessedData } from "@/types/student";
 import { useToast } from "@/hooks/use-toast";
+import { EmailShareDialog } from "@/components/EmailShareDialog";
 
 interface ReasoningQueryProps {
   data: ProcessedData;
@@ -296,9 +296,22 @@ Be specific about confidence levels and acknowledge limitations in the analysis.
                     <MessageCircle className="h-5 w-5 text-blue-600" />
                     <Badge variant="outline">{result.reasoning_type}</Badge>
                   </div>
-                  <span className="text-sm text-gray-500">
-                    {result.timestamp.toLocaleString()}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <EmailShareDialog
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          Email Results
+                        </Button>
+                      }
+                      type="reasoning"
+                      data={result}
+                      defaultSubject={`AI Reasoning Analysis: ${result.reasoning_type}`}
+                    />
+                    <span className="text-sm text-gray-500">
+                      {result.timestamp.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-sm font-medium bg-blue-50 p-3 rounded">
                   {result.query}

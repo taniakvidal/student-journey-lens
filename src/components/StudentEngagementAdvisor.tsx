@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Users, AlertTriangle, TrendingUp, MessageSquare, CheckCircle, Clock, ArrowRight } from "lucide-react";
 import { ProcessedData } from "@/types/student";
 import { useToast } from "@/hooks/use-toast";
+import { EmailShareDialog } from "@/components/EmailShareDialog";
 
 interface StudentEngagementAdvisorProps {
   data: ProcessedData;
@@ -456,7 +456,18 @@ Respond in JSON format:
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Decision Analysis Summary</span>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
+                  <EmailShareDialog
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Email Analysis
+                      </Button>
+                    }
+                    type="advisor"
+                    data={analysis}
+                    defaultSubject="Student Engagement Analysis Results"
+                  />
                   <Badge className="bg-red-500 text-white">
                     {analysis.immediate_actions} Immediate
                   </Badge>
